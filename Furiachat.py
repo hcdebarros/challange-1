@@ -1,25 +1,5 @@
 import requests
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
-from telegram.ext import ConversationHandler
-
-# Seu token do Bot
-TOKEN = '7753296815:AAEniJ4_oYuXSKWcKujODqfP6J4nmrdwCUI'  # Coloque seu token aqui
-
-# Função de boas-vindas quando o comando /start é chamado
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_message = """
-    Bem-vindo à Selva! Escolha uma das opções abaixo:
-    
-    /noticias - Veja as últimas notícias de e-sports
-    /alertas - Receba alertas sobre os rounds
-    /quiz - Participe da votação para o melhor jogador
-    /redes - Acesse as redes sociais da FURIA
-    """
-    await update.message.reply_text(welcome_message)
-
-import requests
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from telegram.ext import ConversationHandler
 from bs4 import BeautifulSoup
@@ -92,7 +72,6 @@ def obter_noticias_hltv():
 
 # Função para pegar notícias de e-sports
 async def noticias(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    esports = ["LOL", "CS2"]
     noticias_msg = "Últimas notícias e destaques de e-Sports:\n"
     
     noticias_msg += f"\n**LOL Fandom**:\n{obter_noticias_lol()}"
@@ -103,18 +82,67 @@ async def noticias(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(noticias_msg)
 
+# Função para exibir as redes sociais da FURIA
+async def redes_sociais(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    redes = """
+    Siga a FURIA nas redes sociais:
+    - Instagram: [@FURIA](https://instagram.com/furiagg)
+    - Twitter: [@FURIA](https://twitter.com/FURIA)
+    - YouTube: [@FURIA](https://www.youtube.com/channel/UCE4elIT7DqDv545IA71feHg)
+    - TikTok Esports: [@FURIA](https://tiktok.com/@furiagg)
+    - Twitch: [@FURIA](https://twitch.tv/team/furia)
+    """
+    # Escape para o MarkdownV2
+    redes = redes.replace("-", "\-")  # Escapa o hífen
+    await update.message.reply_text(redes, parse_mode="MarkdownV2")
 
-
-
-# Função para pegar alertas de início e término de round
+# Função para o menu de alertas
 async def alertas(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔔 **Alerta de Round!**\n\nEscolha uma opção:\n1. Início do Round\n2. Término do Round")
+    keyboard = [
+        [
+            InlineKeyboardButton("League of Legends", callback_data="lol"),
+            InlineKeyboardButton("CS2", callback_data="cs2")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "🔔 **Escolha o jogo para receber alertas de round**:",
+        reply_markup=reply_markup
+    )
 
-async def inicio_round(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🚨 O round começou! Prepare-se!")
+# Função para alertas de round de LOL ou CS2
+async def escolher_alerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    game_choice = query.data  # "lol" ou "cs2"
 
-async def termino_round(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🛑 O round terminou! Hora de analisar o desempenho.")
+    if game_choice == "lol":
+        await query.edit_message_text(
+            "Escolha o tipo de alerta para o **League of Legends**:\n1. Início do Round\n2. Término do Round",
+            reply_markup=None
+        )
+    elif game_choice == "cs2":
+        await query.edit_message_text(
+            "Escolha o tipo de alerta para o **CS2**:\n1. Início do Round\n2. Término do Round",
+            reply_markup=None
+        )
+    return "WAITING_FOR_ALERT"
+
+# Função para enviar o alerta de início ou término de round
+async def round_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    escolha = update.message.text
+
+    if escolha == "1":
+        await update.message.reply_text("🚨 O round começou! Prepare-se!")
+    elif escolha == "2":
+        await update.message.reply_text("🛑 O round terminou! Hora de analisar o desempenho.")
+    else:
+        await update.message.reply_text("Escolha inválida! Tente novamente.")
+
+    return ConversationHandler.END
+
+# Definindo o estado de espera para a escolha de alertas
+WAITING_FOR_ALERT = 1
 
 # Função para o Quiz de Votação do Melhor Jogador
 MELHOR_JOGADOR, VOTACAO = range(2)
@@ -138,26 +166,19 @@ async def votacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# Função para exibir as redes sociais da FURIA
-
-async def redes_sociais(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    redes = """
-    Siga a FURIA nas redes sociais:
-    - Instagram: [@FURIA](https://instagram.com/furiagg)
-    - Twitter: [@FURIA](https://twitter.com/FURIA)
-    - YouTube: [@FURIA](https://www.youtube.com/channel/UCE4elIT7DqDv545IA71feHg)
-    - TikTok Esports: [@FURIA](https://tiktok.com/@furiagg)
-    - Twitch: [@FURIA](https://twitch.tv/team/furia)
-    """
-    # Escape para o MarkdownV2
-    redes = redes.replace("-", "\-")  # Escapa o hífen
-    await update.message.reply_text(redes, parse_mode="MarkdownV2")
-
-
 # Funções para completar o fluxo do Quiz
 quiz_handler = ConversationHandler(
     entry_points=[CommandHandler("quiz", quiz)],
     states={MELHOR_JOGADOR: [MessageHandler(filters.TEXT & ~filters.Command(), votacao)]},
+    fallbacks=[]
+)
+
+# Funções do ciclo de alertas
+alertas_handler = ConversationHandler(
+    entry_points=[CommandHandler("alertas", alertas)],
+    states={
+        "WAITING_FOR_ALERT": [MessageHandler(filters.TEXT & ~filters.Command(), round_alert)]
+    },
     fallbacks=[]
 )
 
@@ -169,14 +190,9 @@ app.add_handler(CommandHandler("start", start))
 
 # Comandos principais
 app.add_handler(CommandHandler("noticias", noticias))  # Notícias e destaques de e-sports
-app.add_handler(CommandHandler("alertas", alertas))  # Alertas de round
+app.add_handler(alertas_handler)  # Handler para o menu de alertas
 app.add_handler(CommandHandler("redes", redes_sociais))  # Redes sociais da FURIA
-app.add_handler(CommandHandler("noticias", noticias))
 app.add_handler(quiz_handler)  # Quiz para votação de melhor jogador
-
-# Comandos de round (pode ser em uma sequência ou botão)
-app.add_handler(CommandHandler("inicio_round", inicio_round))
-app.add_handler(CommandHandler("termino_round", termino_round))
 
 # Rodando o bot
 print("Bot rodando...")

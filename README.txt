@@ -45,6 +45,8 @@ Para fazer o servidor rodar localmente precisa-se abrir o cmd e digitar:
 
 cd "diretório de onde estão os arquivos"
 depois digitar:
-python -m venv venv
-depois digitar:
 venv\Scripts\activate
+e por fim:
+python Furiachat.py
+
+Se aparecer "bot rodando..." é porque funcionou.

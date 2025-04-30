@@ -1,238 +1,101 @@
-import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, ContextTypes,
-    ConversationHandler, MessageHandler, CallbackQueryHandler, filters
-)
-from bs4 import BeautifulSoup
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# Token do Bot
-TOKEN = '7753296815:AAEniJ4_oYuXSKWcKujODqfP6J4nmrdwCUI'  # Troca isso pelo token real
-
-# Estados da conversa
-WAITING_FOR_GAME_SELECTION = 1
-WAITING_FOR_ALERT = 2
-MELHOR_JOGADOR = 3
+JOGOS = ["CS2", "LOL", "Rocket League", "Rainbow Six", "Valorant"]
 
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_message = """
-    Bem-vindo à Selva! Escolha uma das opções abaixo:
-    
-    /noticias - Veja as últimas notícias de e-sports
-    /alertas - Receba alertas sobre os rounds
-    /quiz - Participe da votação para o melhor jogador
-    /redes - Acesse as redes sociais da FURIA
-    """
-    await update.message.reply_text(welcome_message)
+    teclado = [
+        [InlineKeyboardButton("📰 Notícias", callback_data="menu_noticias")],
+        [InlineKeyboardButton("🚨 Alertas", callback_data="menu_alertas")],
+        [InlineKeyboardButton("❓ Quiz", callback_data="menu_quiz")],
+        [InlineKeyboardButton("🌐 Redes", callback_data="menu_redes")],
+    ]
+    await update.message.reply_text(
+        "🎮 Bem vindo à selva, escolha uma das opções abaixo para continuar:",
+        reply_markup=InlineKeyboardMarkup(teclado)
+    )
 
-# ======== SCRAPING DE NOTÍCIAS ========
-def obter_noticias_lol():
-    url = "https://lol.fandom.com/wiki/League_of_Legends_Esports_Wiki"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-    noticias = [item.get_text(strip=True) for item in soup.find_all('h3', {'class': 'pi-item'})]
-    return "\n".join(noticias)
+# Gera menu com botões a partir da lista de jogos
+def gerar_menu_jogos(prefixo_callback):
+    teclado = [[InlineKeyboardButton(jogo, callback_data=f"{prefixo_callback}_{jogo}")] for jogo in JOGOS]
+    return InlineKeyboardMarkup(teclado)
 
-def obter_noticias_gosugamers():
-    url = "https://www.gosugamers.net/lol"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-    noticias = [item.get_text(strip=True) for item in soup.find_all('h3', {'class': 'article-title'})]
-    return "\n".join(noticias)
-
-def obter_noticias_dust2():
-    url = "https://www.dust2.com.br"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-    noticias = [item.get_text(strip=True) for item in soup.find_all('h2', {'class': 'entry-title'})]
-    return "\n".join(noticias)
-
-def obter_noticias_draft5():
-    url = "https://draft5.gg"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-    noticias = [item.get_text(strip=True) for item in soup.find_all('h2', {'class': 'entry-title'})]
-    return "\n".join(noticias)
-
-def obter_noticias_hltv():
-    url = "https://www.hltv.org"
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, 'html.parser')
-    noticias = [item.get_text(strip=True) for item in soup.find_all('a', {'class': 'newsitem'})]
-    return "\n".join(noticias)
+# Generalizada: envia texto com botões, tanto pra comandos quanto pra callback
+async def responder(update, text, reply_markup=None):
+    if update.message:
+        await update.message.reply_text(text, reply_markup=reply_markup)
+    elif update.callback_query:
+        await update.callback_query.message.edit_text(text, reply_markup=reply_markup)
 
 # /noticias
 async def noticias(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[
-        InlineKeyboardButton("LOL", callback_data="lol"),
-        InlineKeyboardButton("CS2", callback_data="cs2")
-    ]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("📰 Escolha o jogo para receber as últimas notícias:", reply_markup=reply_markup)
-    return WAITING_FOR_GAME_SELECTION
-
-async def exibir_noticias(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    game_choice = query.data
-
-    if game_choice == "lol":
-        msg = "Últimas notícias de **League of Legends**:\n"
-        msg += f"\n**LOL Fandom**:\n{obter_noticias_lol()}"
-        msg += f"\n**LOL GosuGamers**:\n{obter_noticias_gosugamers()}"
-    elif game_choice == "cs2":
-        msg = "Últimas notícias de **CS2**:\n"
-        msg += f"\n**Dust2**:\n{obter_noticias_dust2()}"
-        msg += f"\n**Draft5**:\n{obter_noticias_draft5()}"
-        msg += f"\n**HLTV**:\n{obter_noticias_hltv()}"
-
-    await query.edit_message_text(msg)
-    return ConversationHandler.END
-
-# /quiz
-
-async def exibir_noticias(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    game_choice = query.data  # "lol" ou "cs2"
-
-    if game_choice == "lol":
-        msg = "📰 *Últimas notícias de League of Legends:*\n"
-        msg += f"\n📌 *LOL Fandom:*\n{obter_noticias_lol()}"
-        msg += f"\n📌 *LOL GosuGamers:*\n{obter_noticias_gosugamers()}"
-        await query.edit_message_text(msg, parse_mode="Markdown")
-
-    elif game_choice == "cs2":
-        msg = "📰 *Últimas notícias de CS2:*\n"
-        msg += f"\n📌 *Dust2:*\n{obter_noticias_dust2()}"
-        msg += f"\n📌 *Draft5:*\n{obter_noticias_draft5()}"
-        msg += f"\n📌 *HLTV:*\n{obter_noticias_hltv()}"
-        await query.edit_message_text(msg, parse_mode="Markdown")
-
-    else:
-        await query.edit_message_text("❌ Escolha inválida. Tente novamente.")
-
-    return ConversationHandler.END
-
-# Estado do ConversationHandler
-MELHOR_JOGADOR = 3
-
-# Lista dos jogadores (você pode trocar pelos da FURIA mesmo)
-JOGADORES = ["KSCERATO", "yuurih", "YEKINDAR", "molodoy", "Fallen"]
-
-# Função inicial do quiz
-async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if "votos" not in context.bot_data:
-        context.bot_data["votos"] = {jogador: 0 for jogador in JOGADORES}
-
-    keyboard = [
-        [InlineKeyboardButton(jogador, callback_data=jogador)] for jogador in JOGADORES
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        "🏆 Quem foi o melhor jogador do último jogo?",
-        reply_markup=reply_markup
-    )
-    return MELHOR_JOGADOR
-
-# Função de votação
-async def votacao(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    voto = query.data
-
-    if voto in context.bot_data["votos"]:
-        context.bot_data["votos"][voto] += 1
-
-    votos = context.bot_data["votos"]
-    resultado = "📊 *Parcial da votação:*\n\n"
-    for jogador, qtd in votos.items():
-        resultado += f"• {jogador}: {qtd} voto(s)\n"
-
-    await query.edit_message_text(resultado, parse_mode="Markdown")
-    return ConversationHandler.END
+    await responder(update, "📰 Escolha o jogo para ver notícias:", gerar_menu_jogos("noticias"))
 
 # /alertas
 async def alertas(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[
-        InlineKeyboardButton("League of Legends", callback_data="alerta_lol"),
-        InlineKeyboardButton("CS2", callback_data="alerta_cs2")
-    ]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("🔔 Escolha o jogo para perguntar algo sobre o round:", reply_markup=reply_markup)
-    return WAITING_FOR_GAME_SELECTION
+    await responder(update, "🚨 Escolha o jogo para configurar alertas:", gerar_menu_jogos("alertas"))
 
-async def jogo_escolhido_para_alerta(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# /quiz
+async def quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await responder(update, "❓ Escolha o jogo para jogar o quiz:", gerar_menu_jogos("quiz"))
+
+# /redes
+async def redes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    redes = """
+🌐 Siga a FURIA nas redes sociais:
+
+- [Instagram](https://instagram.com/furiagg)
+- [Twitter](https://twitter.com/FURIA)
+- [YouTube](https://www.youtube.com/channel/UCE4elIT7DqDv545IA71feHg)
+- [TikTok](https://tiktok.com/@furiagg)
+- [Twitch](https://twitch.tv/team/furia)
+"""
+    if update.message:
+        await update.message.reply_text(redes, parse_mode="Markdown", disable_web_page_preview=True)
+    elif update.callback_query:
+        await update.callback_query.message.edit_text(redes, parse_mode="Markdown", disable_web_page_preview=True)
+
+# Callback geral para todos os botões
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    jogo = query.data.replace("alerta_", "")
-    context.user_data["jogo_alerta"] = jogo
-    await query.edit_message_text(f"🎮 Jogo escolhido: {jogo.upper()}. Agora me diga o que você quer saber:")
-    return WAITING_FOR_ALERT
 
-async def round_alert(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pergunta = update.message.text.lower()
-    jogo = context.user_data.get("jogo_alerta", "cs2")
+    if query.data == "menu_noticias":
+        await noticias(update, context)
+        return
+    elif query.data == "menu_alertas":
+        await alertas(update, context)
+        return
+    elif query.data == "menu_quiz":
+        await quiz(update, context)
+        return
+    elif query.data == "menu_redes":
+        await redes(update, context)
+        return
 
-    if "quando" in pergunta or "data" in pergunta:
-        resposta = f"O próximo jogo de {jogo.upper()} é amanhã às 18h (simulado)"
-    elif "mapa" in pergunta:
-        resposta = f"O mapa mais jogado recentemente pela FURIA no {jogo.upper()} foi Mirage."
-    elif "lineup" in pergunta or "jogadores" in pergunta:
-        resposta = f"O lineup atual da FURIA no {jogo.upper()} é: KSCERATO, yuurih, arT, chelo e fallen."
-    else:
-        resposta = f"🤖 Não entendi bem... Pergunta tipo: 'Quando é o próximo jogo?', 'Qual o mapa?', 'Quem joga?'"
+    tipo, jogo = query.data.split("_", 1)
 
-    await update.message.reply_text(resposta)
-    return ConversationHandler.END
+    if tipo == "noticias":
+        await query.edit_message_text(f"📰 Aqui estão as últimas notícias sobre {jogo}. (a implementar)")
+    elif tipo == "alertas":
+        await query.edit_message_text(f"🚨 Alertas de {jogo}: escolha o tipo de alerta. (a implementar)")
+    elif tipo == "quiz":
+        await query.edit_message_text(f"❓ Quiz de {jogo}: escolha uma categoria. (a implementar)")
 
-# /redes (exemplo simples)
-async def redes_sociais(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    redes = """
-    Siga a FURIA nas redes sociais:
-    - Instagram: [@FURIA](https://instagram.com/furiagg)
-    - Twitter: [@FURIA](https://twitter.com/FURIA)
-    - YouTube: [@FURIA](https://www.youtube.com/channel/UCE4elIT7DqDv545IA71feHg)
-    - TikTok Esports: [@FURIA](https://tiktok.com/@furiagg)
-    - Twitch: [@FURIA](https://twitch.tv/team/furia)
-    """
-    # Escape para o MarkdownV2
-    redes = redes.replace("-", "\-")  # Escapa o hífen
-    await update.message.reply_text(redes, parse_mode="MarkdownV2")
+# Main
+def main():
+    app = ApplicationBuilder().token("7753296815:AAEniJ4_oYuXSKWcKujODqfP6J4nmrdwCUI").build()
 
-# ========================
-# MONTA O APP E OS HANDLERS
-# ========================
-app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("noticias", noticias))
+    app.add_handler(CommandHandler("alertas", alertas))
+    app.add_handler(CommandHandler("quiz", quiz))
+    app.add_handler(CommandHandler("redes", redes))
+    app.add_handler(CallbackQueryHandler(handle_callback))
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("redes", redes_sociais))
+    print("Bot rodando...")
+    app.run_polling()
 
-# Noticias
-app.add_handler(ConversationHandler(
-    entry_points=[CommandHandler("noticias", noticias)],
-    states={WAITING_FOR_GAME_SELECTION: [CallbackQueryHandler(exibir_noticias)]},
-    fallbacks=[]
-))
-
-# Alertas
-app.add_handler(ConversationHandler(
-    entry_points=[CommandHandler("alertas", alertas)],
-    states={
-        WAITING_FOR_GAME_SELECTION: [CallbackQueryHandler(jogo_escolhido_para_alerta)],
-        WAITING_FOR_ALERT: [MessageHandler(filters.TEXT & ~filters.COMMAND, round_alert)]
-    },
-    fallbacks=[]
-))
-
-# Quiz
-app.add_handler(ConversationHandler(
-    entry_points=[CommandHandler("quiz", quiz)],
-    states={MELHOR_JOGADOR: [CallbackQueryHandler(votacao)]},
-    fallbacks=[]
-))
-
-print("Bot rodando... Ctrl+C pra parar")
-app.run_polling()
+if __name__ == "__main__":
+    main()
